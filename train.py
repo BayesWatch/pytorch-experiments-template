@@ -64,18 +64,7 @@ start_epoch, latest_loadpath = get_start_epoch(args)
 args.latest_loadpath = latest_loadpath
 
 
-if not args.resume:
-    # These are the currently tracked stats. I'm sure there are cleaner ways of doing this though.
-    save_statistics(logs_filepath, "result_summary_statistics",
-                    ["epoch",
-                     "train_loss",
-                     "test_loss",
-                     "train_loss_c",
-                     "test_loss_c",
-                     "train_acc",
-                     "test_acc",
-                     ],
-                    create=True)
+
 
 ######################################################################################################### Model
 num_classes = 10 if args.dataset != 'Cifar-100' else 100
@@ -90,6 +79,7 @@ net = net.to(device)
 ######################################################################################################### Optimisation
 params = net.parameters()
 criterion = nn.CrossEntropyLoss()
+
 
 if args.optim.lower() == 'sgd':
     optimizer = optim.SGD(params, lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -110,6 +100,22 @@ restore_fields = {
 
 if args.resume:
     restore_model(restore_fields, args)
+
+
+######################################################################################################### Metric Tracking
+
+metrics_of_interest = ['epoch', 'loss', 'accuracy']
+
+if not args.resume:
+    save_statistics(logs_filepath, "result_summary_statistics_train",
+                    metrics_of_interest,
+                    create=True)
+    save_statistics(logs_filepath, "result_summary_statistics_eval",
+                    metrics_of_interest,
+                    create=True)
+
+
+
 ######################################################################################################### Training
 
 
@@ -120,8 +126,8 @@ def run_epoch(epoch, train=True):
         net.train()
     else:
         net.eval()
+
     total_loss = 0
-    total_loss_c = 0
     correct = 0
     total = 0
     batches = n_train_batches if train else n_test_batches
@@ -131,9 +137,9 @@ def run_epoch(epoch, train=True):
             inputs, targets = inputs.to(device), targets.to(device)
 
             logits, activations = net(inputs)
-            loss_c = criterion(logits, targets)
+            loss_criterion = criterion(logits, targets)
 
-            loss = loss_c  # and maybe others...
+            loss = loss_criterion  # and maybe others...
 
 
 
@@ -143,17 +149,15 @@ def run_epoch(epoch, train=True):
                 optimizer.step()
 
             total_loss += loss.item()
-            total_loss_c += loss_c.item()
             _, predicted = logits.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            iter_out = '{}, {}: {}; Loss: {:0.4f}, Loss_c: {:0.4f}, Acc: {:0.4f}'.format(
+            iter_out = '{}, {}: {}; Loss: {:0.4f}, Acc: {:0.4f}'.format(
                 args.exp_name,
                 identifier,
                 batch_idx,
                 total_loss / (batch_idx + 1),
-                total_loss_c / (batch_idx + 1),
                 100. * correct / total,
             )
 
@@ -163,8 +167,11 @@ def run_epoch(epoch, train=True):
             if args.save_images and batch_idx==0:
                 # Would save any images here under '{}/{}/{}_stuff.png'.format(images_filepath, identifier, epoch)
                 pass
+            if batch_idx == 1:
+                break
+    metrics = [epoch, total_loss/(batch_idx+1), correct/total]
 
-    return total_loss / batches, total_loss_c / batches, correct / total
+    return metrics
 
 
 if __name__ == "__main__":
@@ -172,19 +179,18 @@ if __name__ == "__main__":
         for epoch in range(start_epoch, args.max_epochs):
 
 
-            train_loss, train_loss_c, train_acc = run_epoch(epoch, train=True)
-            test_loss, test_loss_c, test_acc = run_epoch(epoch, train=False)
+            train_metrics = run_epoch(epoch, train=True)
+            eval_metrics = run_epoch(epoch, train=False)
+
 
             scheduler.step()
 
-            save_statistics(logs_filepath, "result_summary_statistics",
-                            [epoch,
-                             train_loss,
-                             test_loss,
-                             train_loss_c,
-                             test_loss_c,
-                             train_acc,
-                             test_acc])
+            # saving time:
+            assert len(train_metrics) == len(metrics_of_interest), 'Train metrics length {} is not the same as stated metrics of interest, length {}'.format(len(train_metrics), len(metrics_of_interest))
+            assert len(eval_metrics) == len(metrics_of_interest), 'Eval metrics length {} is not the same as stated metrics of interest, length {}'.format(len(eval_metrics), len(metrics_of_interest))
+
+            save_statistics(logs_filepath, "result_summary_statistics_train", train_metrics)
+            save_statistics(logs_filepath, "result_summary_statistics_train", eval_metrics)
 
             ############################################################################################## Saving models
             if args.save:

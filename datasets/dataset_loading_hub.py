@@ -6,7 +6,7 @@ from collections import namedtuple
 
 from torch.utils.data import Subset
 
-from datasets.custom_transforms import SimCLRTransform
+from datasets.custom_transforms import *
 from utils.cinic_utils import enlarge_cinic_10, download_cinic
 from rich import print
 
@@ -14,27 +14,38 @@ ImageShape = namedtuple("ImageShape", ["channels", "width", "height"])
 
 
 class MNISTLoader:
-    def __init__(self):
+    def get_default_transforms(self):
         normalize = transforms.Normalize(mean=[0.1307], std=[0.3081])
-        self.image_shape = ImageShape(1, 28, 28)
 
-        self.transform_train = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                normalize,
-            ]
+        transform_train = [
+            transforms.ToTensor(),
+            normalize,
+        ]
+
+        transform_validate = [
+            transforms.ToTensor(),
+            normalize,
+        ]
+
+        return transform_train, transform_validate
+
+    def get_data(
+        self, data_filepath, val_set_percentage, download=False
+    ):
+        self.image_shape = ImageShape(
+            1,
+            28,
+            28,
         )
+        transform_train, transform_validate = self.get_default_transforms()
 
-        self.transform_validate = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                normalize,
-            ]
-        )
-
-    def get_data(self, data_filepath, val_set_percentage, download=False):
         train_set = datasets.MNIST(
-            data_filepath, train=True, download=download, transform=self.transform_train
+            data_filepath,
+            train=True,
+            download=download,
+            transform=transforms.Compose(
+                transform_train
+            ),
         )
         num_training_items = int(len(train_set) * (1.0 - val_set_percentage))
         num_val_items = len(train_set) - num_training_items
@@ -44,9 +55,63 @@ class MNISTLoader:
         )
 
         test_set = datasets.MNIST(
-            data_filepath, train=False, transform=self.transform_validate
+            data_filepath,
+            train=False,
+            transform=transform_validate,
         )
         num_labels = 10
+        return train_set, val_set, test_set, num_labels
+
+
+class EMNISTLoader:
+    def get_default_transforms(self):
+        normalize = transforms.Normalize(mean=[0.1307], std=[0.3081])
+
+        transform_train = [
+            transforms.ToTensor(),
+            normalize,
+        ]
+
+        transform_validate = [
+            transforms.ToTensor(),
+            normalize,
+        ]
+
+        return transform_train, transform_validate
+
+    def get_data(
+        self, data_filepath, val_set_percentage, download=False
+    ):
+        self.image_shape = ImageShape(
+            1,
+            28,
+            28,
+        )
+        transform_train, transform_validate = self.get_default_transforms()
+
+        train_set = datasets.EMNIST(
+            data_filepath,
+            split="balanced",
+            train=True,
+            download=download,
+            transform=transforms.Compose(
+                transform_train
+            ),
+        )
+        num_training_items = int(len(train_set) * (1.0 - val_set_percentage))
+        num_val_items = len(train_set) - num_training_items
+
+        train_set, val_set = torch.utils.data.random_split(
+            train_set, [num_training_items, num_val_items]
+        )
+
+        test_set = datasets.EMNIST(
+            data_filepath,
+            split="balanced",
+            train=False,
+            transform=transform_validate,
+        )
+        num_labels = 47
         return train_set, val_set, test_set, num_labels
 
 
@@ -99,33 +164,51 @@ class CINIC10Loader:
 
 
 class CIFAR10Loader:
-    def __init__(self):
+    def get_default_transforms(self):
         normalize = transforms.Normalize(
             mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010]
         )
-        self.image_shape = ImageShape(3, 32, 32)
-        self.transform_train = transforms.Compose(
-            [
-                transforms.RandomCrop(self.image_shape.width, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize,
-            ]
-        )
+        transform_train = [
+            transforms.RandomCrop(self.image_shape.width, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ]
 
-        self.transform_validate = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                normalize,
-            ]
-        )
+        transform_validate = [
+            transforms.ToTensor(),
+            normalize,
+        ]
 
-    def get_data(self, data_filepath, val_set_percentage, download=False):
+        return transform_train, transform_validate
+
+    def get_data(
+        self, data_filepath, val_set_percentage, download=False
+    ):
+        self.image_shape = ImageShape(
+            3
+            if not any(
+                [
+                    isinstance(transform, CutoutWithLocationChannel)
+                    or isinstance(transform, ReverseCutoutWithLocationChannel)
+                    or isinstance(transform, RandomCutoutWithLocationChannel)
+                    or isinstance(transform, RandomReverseCutoutWithLocationChannel)
+                    for transform in extra_transforms
+                ]
+            )
+            else 4,
+            32,
+            32,
+        )
+        transform_train, transform_validate = self.get_default_transforms()
+
         train_set = datasets.CIFAR10(
             root=data_filepath,
             train=True,
             download=download,
-            transform=self.transform_train,
+            transform=transforms.Compose(
+                transform_train
+            ),
         )
 
         num_training_items = int(len(train_set) * (1.0 - val_set_percentage))
@@ -139,41 +222,52 @@ class CIFAR10Loader:
             root=data_filepath,
             train=False,
             download=download,
-            transform=self.transform_validate,
+            transform=transforms.Compose(
+                transform_validate
+            ),
         )
 
         num_labels = 10
+
         return train_set, val_set, test_set, num_labels
 
 
 class CIFAR100Loader:
-    def __init__(self):
+    def get_default_transforms(self):
         normalize = transforms.Normalize(
             mean=[0.5071, 0.4866, 0.4409], std=[0.2009, 0.1984, 0.2023]
         )
-        self.image_shape = ImageShape(3, 32, 32)
-        self.transform_train = transforms.Compose(
-            [
-                transforms.RandomCrop(self.image_shape.width, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize,
-            ]
-        )
+        transform_train = [
+            transforms.RandomCrop(self.image_shape.width, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ]
 
-        self.transform_validate = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                normalize,
-            ]
-        )
+        transform_validate = [
+            transforms.ToTensor(),
+            normalize,
+        ]
 
-    def get_data(self, data_filepath, val_set_percentage, download=False):
+        return transform_train, transform_validate
+
+    def get_data(
+        self, data_filepath, val_set_percentage, download=False, extra_transforms=[]
+    ):
+        self.image_shape = ImageShape(
+            3,
+            32,
+            32,
+        )
+        transform_train, transform_validate = self.get_default_transforms()
+
         train_set = datasets.CIFAR100(
             root=data_filepath,
             train=True,
             download=download,
-            transform=self.transform_train,
+            transform=transforms.Compose(
+                transform_train
+            ),
         )
 
         num_training_items = int(len(train_set) * (1.0 - val_set_percentage))
@@ -187,7 +281,9 @@ class CIFAR100Loader:
             root=data_filepath,
             train=False,
             download=download,
-            transform=self.transform_validate,
+            transform=transforms.Compose(
+                transform_validate
+            ),
         )
 
         num_labels = 100
@@ -199,30 +295,38 @@ class ImageNetLoader:
         normalize = transforms.Normalize(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
-        self.image_shape = ImageShape(3, 224, 224)
-        self.transform_train = transforms.Compose(
-            [
-                transforms.RandomResizedCrop(self.image_shape.width),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize,
-            ]
+        self.transform_train = [
+            transforms.RandomResizedCrop(self.image_shape.width),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ]
+
+        self.transform_validate = [
+            transforms.Resize(256),
+            transforms.CenterCrop(self.image_shape.width),
+            transforms.ToTensor(),
+            normalize,
+        ]
+
+    def get_data(
+        self, data_filepath, val_set_percentage, **kwargs
+    ):
+        self.image_shape = ImageShape(
+            3,
+            224,
+            224,
         )
 
-        self.transform_validate = transforms.Compose(
-            [
-                transforms.Resize(256),
-                transforms.CenterCrop(self.image_shape.width),
-                transforms.ToTensor(),
-                normalize,
-            ]
-        )
-
-    def get_data(self, data_filepath, val_set_percentage, **kwargs):
         train_dir = os.path.join(data_filepath, "train")
         val_dir = os.path.join(data_filepath, "val")
 
-        train_set = datasets.ImageFolder(train_dir, self.transform_train)
+        train_set = datasets.ImageFolder(
+            train_dir,
+            transforms.Compose(
+                self.transform_train
+            ),
+        )
 
         num_training_items = int(len(train_set) * (1.0 - val_set_percentage))
         num_val_items = len(train_set) - num_training_items
@@ -231,9 +335,15 @@ class ImageNetLoader:
             train_set, [num_training_items, num_val_items]
         )
 
-        test_set = datasets.ImageFolder(val_dir, self.transform_validate)
+        test_set = datasets.ImageFolder(
+            val_dir,
+            transforms.Compose(
+                self.transform_validate
+            ),
+        )
 
         num_labels = 1000
+
         return train_set, val_set, test_set, num_labels
 
 
@@ -250,6 +360,7 @@ def load_dataset(
 
     datasets = {
         "mnist": MNISTLoader,
+        "emnist": EMNISTLoader,
         "cinic10": CINIC10Loader,
         "cifar10": CIFAR10Loader,
         "cifar100": CIFAR100Loader,
@@ -257,13 +368,14 @@ def load_dataset(
     }
 
     dataloader = datasets[dataset.lower()]()
-
     ### e.g. ADD SIMCLR
     # dataloader.transform_train = SimCLRTransform(size=dataloader.im_size.width)
     ###
 
     train_set, val_set, test_set, num_labels = dataloader.get_data(
-        data_filepath, val_set_percentage=val_set_percentage, download=download
+        data_filepath,
+        val_set_percentage=val_set_percentage,
+        download=download,
     )
 
     train_loader = torch.utils.data.DataLoader(

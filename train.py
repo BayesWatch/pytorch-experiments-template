@@ -47,9 +47,9 @@ def get_base_argument_parser():
     )
 
     parser.add_argument("--dataset_name", type=str, default="cifar10")
-    parser.add_argument("--data_filepath", type=str, default="../data/cifar10")
-    parser.add_argument("--batch_size", type=int, default=256)
-    parser.add_argument("--eval_batch_size", type=int, default=256)
+    parser.add_argument("--data_filepath", type=str, default="data/")
+    parser.add_argument("--batch_size", type=int, default=100)
+    parser.add_argument("--eval_batch_size", type=int, default=100)
 
     parser.add_argument("--max_epochs", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
@@ -254,8 +254,8 @@ if __name__ == "__main__":
         data_shape,
         num_classes,
     ) = load_dataset(
-        args.dataset_name,
-        args.data_filepath
+        dataset=args.dataset_name,
+        data_filepath=args.data_filepath
         if environment_data_filepath is None
         else environment_data_filepath,
         batch_size=args.batch_size,
@@ -296,7 +296,7 @@ if __name__ == "__main__":
     ######################################################################################################### Model
 
     model = model_zoo[args.model.type](
-        num_classes=num_classes,
+        num_classes=num_classes, in_channels=data_shape[0]
     ).to(device)
 
     # alternatively one can define a model directly as follows

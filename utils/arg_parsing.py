@@ -1,5 +1,6 @@
 import argparse
 import json
+import yaml
 from collections import namedtuple, defaultdict
 import pprint
 from utils.storage import load_dict_from_json
@@ -10,13 +11,22 @@ from rich import print
 # 3. priority should be defaults, json file, then any additional command line arguments
 def merge_json_with_mutable_arguments(json_file_path, arg_dict):
 
-    config_dict = load_dict_from_json(json_file_path)
+    if json_file_path.endswith(".json"):
+        config_dict = load_dict_from_json(json_file_path)
+    elif json_file_path.endswith(".yaml"):
+        with open(json_file_path, "r") as config_file:
+            config_dict = yaml.load(config_file)
+    else: 
+        raise NotImplementedError(f"Expecting config to be yaml or json but got {json_file_path}.")
+
     arguments_passed_to_command_line = get_arguments_passed_on_command_line(
-        arg_dict=arg_dict
-    )
+            arg_dict=arg_dict
+        )
+
     print(
         "arguments_passed_to_command_line", arguments_passed_to_command_line, sys.argv
     )
+
     for key in config_dict.keys():
         if key in arguments_passed_to_command_line:
             config_dict[key] = arg_dict[key]
@@ -95,7 +105,10 @@ def process_args(parser):
         args_dict = merge_json_with_mutable_arguments(
             json_file_path=args.filepath_to_arguments_json_config, arg_dict=vars(args)
         )
-        args = DictWithDotNotation(args_dict)
+        # convert argparse.Namespace to dictionary with vars()
+        # add in the defaults as a starting point, then update with the extra parsed stuff
+        vars(args).update(args_dict)
+        args = DictWithDotNotation(vars(args))
 
     if isinstance(args, argparse.Namespace):
         args = vars(args)

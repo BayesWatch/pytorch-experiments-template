@@ -76,10 +76,8 @@ class MetricTracker:
 
         return TextColumn(
             "\t".join(
-                [
-                    f"{key}: {{task.fields[{key}]}}"
-                    for key, value in self.metrics.items()
-                ]
+                f"{key}: {{task.fields[{key}]}}"
+                for key, value in self.metrics.items()
             ).expandtabs(2)
         )
 
@@ -92,16 +90,9 @@ class MetricTracker:
         }
 
     def get_current_iteration_metric_trace_string(self):
-        return "".join(
-            [
-                (
-                    "{}: {:0.4f}; ".format(key, value[-1])
+        return "".join("{}: {:0.4f}; ".format(key, value[-1])
                     if isinstance(value[-1], float)
-                    else ""
-                )
-                for key, value in self.metrics.items()
-            ]
-        ).replace("(", "")
+                    else "" for key, value in self.metrics.items()).replace("(", "")
 
     def update_per_epoch_table(
         self,
@@ -116,9 +107,8 @@ class MetricTracker:
         if not self.path.endswith(".pt"):
             self.path = f"{self.path}.pt"
 
-        if overwrite:
-            if os.path.exists(self.path):
-                os.remove(self.path)
+        if overwrite and os.path.exists(self.path):
+            os.remove(self.path)
 
         torch.save(self.metrics, self.path)
 
@@ -135,7 +125,7 @@ class MetricTracker:
         for k, v in self.metrics.items():
             if k in self.metrics_to_track:
                 v = np.array(v)
-                if k != "iterations" and k != "epochs":
+                if k not in ["iterations", "epochs"]:
                     for this_epoch in unique_epochs:
                         where_metrics = epochs == this_epoch
                         v_mean = np.mean(v[where_metrics])

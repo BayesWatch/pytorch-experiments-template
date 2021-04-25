@@ -43,7 +43,7 @@ class MetricTracker:
             self.metrics[k] = []
         for k, _ in metrics_to_track.items():
             self.metrics[k] = []
-        self.metrics["epochs_to_rank"] = dict()
+        self.metrics["epochs_to_rank"] = {}
 
         if load and os.path.isfile(path):
             metrics_from_file = load_metrics_dict_from_pt(path=path)

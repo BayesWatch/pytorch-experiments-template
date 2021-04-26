@@ -336,8 +336,6 @@ def load_split_datasets(dataset, split_tuple):
         total_idx[start_idx:end_idx] for (start_idx, end_idx) in start_end_index_tuples
     ]
 
-    split_sets = (
+    return (
         Subset(dataset, set_indices) for set_indices in set_selection_index_lists
     )
-
-    return split_sets

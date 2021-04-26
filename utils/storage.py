@@ -33,9 +33,8 @@ def save_dict_in_json(path, metrics_dict, overwrite):
 
     metrics_file_path = path
 
-    if overwrite:
-        if os.path.exists(metrics_file_path):
-            os.remove(metrics_file_path)
+    if overwrite and os.path.exists(metrics_file_path):
+        os.remove(metrics_file_path)
 
     with open("{}.json".format(metrics_file_path), "w+") as json_file:
         json.dump(metrics_dict, json_file, indent=4, sort_keys=True)
@@ -70,9 +69,7 @@ def load_metrics_dict_from_pt(path):
 
     metrics_file_path = path
 
-    metrics_dict = torch.load(metrics_file_path)
-
-    return metrics_dict
+    return torch.load(metrics_file_path)
 
 
 def save_metrics_dict_in_pt(path, metrics_dict, overwrite):
@@ -88,9 +85,8 @@ def save_metrics_dict_in_pt(path, metrics_dict, overwrite):
 
     metrics_file_path = path
 
-    if overwrite:
-        if os.path.exists(metrics_file_path):
-            os.remove(metrics_file_path)
+    if overwrite and os.path.exists(metrics_file_path):
+        os.remove(metrics_file_path)
 
     torch.save(metrics_dict, metrics_file_path)
 
@@ -124,9 +120,10 @@ def restore_model(restore_fields, directory, filename, epoch_idx=None, device="c
 
     checkpoint_filepath = (
         f"{directory}/latest_{filename}.ckpt"
-        if epoch_idx == None
+        if epoch_idx is None
         else f"{directory}/epoch_{epoch_idx}_model_{filename}.ckpt"
     )
+
 
     if os.path.isfile(checkpoint_filepath):
         checkpoint = torch.load(
@@ -191,13 +188,12 @@ def get_best_performing_epoch_on_target_metric(
     best_model_epoch = 0
     best_target_metric = None
 
-    if target_metric in metrics_dict:
-        if len(metrics_dict[target_metric]) != 0:
-            best_epoch_idx = ranking_method(metrics_dict[target_metric])
-            best_model_epoch, best_target_metric = (
-                metrics_dict["epoch"][best_epoch_idx],
-                metrics_dict[target_metric][best_epoch_idx],
-            )
+    if target_metric in metrics_dict and len(metrics_dict[target_metric]) != 0:
+        best_epoch_idx = ranking_method(metrics_dict[target_metric])
+        best_model_epoch, best_target_metric = (
+            metrics_dict["epoch"][best_epoch_idx],
+            metrics_dict[target_metric][best_epoch_idx],
+        )
 
     return best_model_epoch, best_target_metric
 

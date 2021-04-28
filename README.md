@@ -1,5 +1,5 @@
 # Pytorch classification experiments template
-
+Doing a quick test
 Template for deep learning projects using pytorch and doing classification.
 
 This template is designed as a fully working experiment starter. That is, simply running `python train.py` will run a small CNN on cifar-10, while handling logging, checkpointing, neat printing to the terminal, datasets, etc. 

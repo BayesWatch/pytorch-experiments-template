@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import torchvision
 from torch import optim
 from torch.utils.data import DataLoader
 from torchvision import datasets
@@ -28,14 +29,16 @@ def train_attention_masks(
         requires_grad=True,
     )
 
-    optimizer = optimizer(params=[patch_attention_mask])
+    nn.init.xavier_uniform(patch_attention_mask)
+
+    optimizer = optimizer(params=[patch_attention_mask], lr=0.1, weight_decay=0.0)
     model = model.eval()
 
     inputs, targets = inputs.to(device), targets.to(device)
 
     output_images = []
 
-    for _ in range(num_iter):
+    for iter in range(num_iter):
         patch_attention_mask_input_size_match = F.adaptive_avg_pool2d(
             input=patch_attention_mask.to(device),
             output_size=(inputs.shape[-2], inputs.shape[-1]),
@@ -43,6 +46,9 @@ def train_attention_masks(
 
         inputs_masked = inputs * patch_attention_mask_input_size_match.sigmoid()
         logits = model(inputs_masked)
+
+        print(patch_attention_mask.sigmoid().sum(),
+              criterion(input=logits, target=targets))
 
         loss = (
             importance_classification_loss * criterion(input=logits, target=targets)
@@ -54,8 +60,11 @@ def train_attention_masks(
         loss.backward()
         optimizer.step()
 
-        mixed_results = torch.cat([inputs_masked, inputs], dim=0)
-        output_images.append(mixed_results)
+        if iter % 50 == 0:
+            mixed_results = torch.cat(
+                [patch_attention_mask_input_size_match.sigmoid()], dim=0
+            )
+            output_images.extend(mixed_results)
 
     return output_images
 
@@ -84,8 +93,16 @@ if __name__ == "__main__":
         ]
     )
 
+    reconstruct_original_transforms = transforms.Compose(
+        [
+            transforms.Resize(size=(224, 224)),
+            transforms.ToTensor(),
+        ]
+    )
+
     input_tensor = preprocess(input_image)
     inputs = input_tensor.unsqueeze(0)  # create a mini-batch as expected by the model
+    originals = reconstruct_original_transforms(input_image).unsqueeze(0)
     targets = torch.Tensor([463]).long()
 
     model = torch.hub.load(
@@ -100,12 +117,31 @@ if __name__ == "__main__":
         inputs,
         targets,
         model,
-        patch_size=(3, 3),
+        patch_size=(32, 32),
         device=torch.cuda.current_device(),
         criterion=F.cross_entropy,
         optimizer=optim.Adam,
-        num_iter=100, importance_mask_size=0.5, importance_classification_loss=0.5
+        num_iter=1000,
+        importance_mask_size=1,
+        importance_classification_loss=100000,
     )
 
-    outputs = torch.stack(outputs, dim=0)
-    print(outputs.shape)
+    output_masks = torch.stack(outputs, dim=0)
+
+    print(output_masks.shape, originals.shape)
+
+    originals = originals.repeat([output_masks.shape[0], 1, 1, 1]).to(
+        torch.cuda.current_device()
+    )
+
+    masked_originals = output_masks * originals
+
+    masked_originals_images = torch.cat(
+        torch.unbind(masked_originals, dim=0), dim=1
+    )  # .permute([1, 2, 0])
+
+    print(masked_originals_images.shape)
+
+    torchvision.utils.save_image(
+        tensor=masked_originals_images, fp="masked_image_dog.png"
+    )

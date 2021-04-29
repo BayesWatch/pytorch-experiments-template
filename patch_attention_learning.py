@@ -17,6 +17,7 @@ def train_attention_masks(
     device,
     criterion,
     optimizer,
+    lr,
     num_iter,
     importance_classification_loss,
     importance_mask_size,
@@ -31,7 +32,7 @@ def train_attention_masks(
 
     nn.init.xavier_uniform(patch_attention_mask)
 
-    optimizer = optimizer(params=[patch_attention_mask], lr=0.1, weight_decay=0.0)
+    optimizer = optimizer(params=[patch_attention_mask], lr=lr)
     model = model.eval()
 
     inputs, targets = inputs.to(device), targets.to(device)
@@ -47,9 +48,6 @@ def train_attention_masks(
         inputs_masked = inputs * patch_attention_mask_input_size_match.sigmoid()
         logits = model(inputs_masked)
 
-        print(patch_attention_mask.sigmoid().sum(),
-              criterion(input=logits, target=targets))
-
         loss = (
             importance_classification_loss * criterion(input=logits, target=targets)
             + importance_mask_size
@@ -60,7 +58,12 @@ def train_attention_masks(
         loss.backward()
         optimizer.step()
 
-        if iter % 50 == 0:
+        if iter % 500 == 0:
+            print(
+                iter,
+                patch_attention_mask.sigmoid().sum(),
+                criterion(input=logits, target=targets),
+            )
             mixed_results = torch.cat(
                 [patch_attention_mask_input_size_match.sigmoid()], dim=0
             )
@@ -121,7 +124,8 @@ if __name__ == "__main__":
         device=torch.cuda.current_device(),
         criterion=F.cross_entropy,
         optimizer=optim.Adam,
-        num_iter=1000,
+        lr=0.01,
+        num_iter=10000,
         importance_mask_size=1,
         importance_classification_loss=100000,
     )

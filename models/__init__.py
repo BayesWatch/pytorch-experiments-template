@@ -1,4 +1,4 @@
-from .auto_builder_models import EasyPeasyResNet
+from .auto_builder_models import *
 from .densenet import *
 from .resnet import *
 from .wresnet import *

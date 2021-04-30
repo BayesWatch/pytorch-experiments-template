@@ -87,6 +87,10 @@ if __name__ == "__main__":
     from PIL import Image
     from torchvision import transforms
 
+    patch_size = 64
+    importance_mask_size = 1
+    importance_classification_loss = 100000
+
     input_image = Image.open(filename)
     preprocess = transforms.Compose(
         [
@@ -120,14 +124,14 @@ if __name__ == "__main__":
         inputs,
         targets,
         model,
-        patch_size=(32, 32),
+        patch_size=(patch_size, patch_size),
         device=torch.cuda.current_device(),
         criterion=F.cross_entropy,
         optimizer=optim.Adam,
         lr=0.01,
         num_iter=10000,
-        importance_mask_size=1,
-        importance_classification_loss=100000,
+        importance_mask_size=importance_mask_size,
+        importance_classification_loss=importance_classification_loss,
     )
 
     output_masks = torch.stack(outputs, dim=0)
@@ -147,5 +151,7 @@ if __name__ == "__main__":
     print(masked_originals_images.shape)
 
     torchvision.utils.save_image(
-        tensor=masked_originals_images, fp="masked_image_dog.png"
+        tensor=masked_originals_images,
+        fp=f"masked_image_dog_{importance_classification_loss}_"
+           f"{importance_mask_size}_{patch_size}.png",
     )

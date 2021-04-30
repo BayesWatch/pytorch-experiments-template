@@ -111,7 +111,7 @@ class DenseNetEmbedding(nn.Module):
             for block_idx in range(self.num_blocks):
 
                 if self.dilated:
-                    dilation_factor = block_idx ** block_idx
+                    dilation_factor = 2 ** block_idx
 
                 self.layer_dict[
                     "stage_{}_block_{}".format(stage_idx, block_idx)
@@ -185,6 +185,7 @@ class AutoDenseNet(ClassificationModel):
                 dilated=dilated,
             )
         ]
+
         super(AutoDenseNet, self).__init__(
             num_classes=num_classes,
             feature_embedding_module_list=feature_embedding_modules,

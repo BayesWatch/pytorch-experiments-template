@@ -34,7 +34,7 @@ def test_AutoDenseNet_layer_output_shape():
         num_classes=10,
         num_filters=16,
         num_stages=3,
-        num_blocks=3,
+        num_blocks=4,
         dilated=False
     )
     dummy_x = torch.zeros((8, 3, 224, 224))
@@ -49,7 +49,7 @@ def test_AutoDenseNetDilated_layer_output_shape():
         num_classes=10,
         num_filters=16,
         num_stages=3,
-        num_blocks=3,
+        num_blocks=4,
         dilated=True
     )
     dummy_x = torch.zeros((8, 3, 224, 224))

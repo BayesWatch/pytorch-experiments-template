@@ -189,7 +189,7 @@ class VisualTransformer(nn.Module):
         return out
 
 
-class EasyPeasyViTFlatten(ClassificationModel):
+class AutoViTFlatten(ClassificationModel):
     def __init__(
         self,
         num_classes,
@@ -214,7 +214,7 @@ class EasyPeasyViTFlatten(ClassificationModel):
                 stem_conv_bias=stem_conv_bias,
             ),
         ]
-        super(EasyPeasyViTFlatten, self).__init__(
+        super(AutoViTFlatten, self).__init__(
             num_classes=num_classes,
             feature_embedding_module_list=feature_embedding_modules,
             feature_embedding_args=feature_embeddings_args,
@@ -230,7 +230,7 @@ class ChooseSpecificTimeStepFromVector(nn.Module):
         return x[:, self.time_step_to_choose, :]
 
 
-class EasyPeasyViTLastTimeStep(ClassificationModel):
+class AutoViTLastTimeStep(ClassificationModel):
     def __init__(
         self,
         num_classes,
@@ -259,7 +259,7 @@ class EasyPeasyViTLastTimeStep(ClassificationModel):
             ),
             dict(time_step_to_choose=0),
         ]
-        super(EasyPeasyViTLastTimeStep, self).__init__(
+        super(AutoViTLastTimeStep, self).__init__(
             num_classes=num_classes,
             feature_embedding_module_list=feature_embedding_modules,
             feature_embedding_args=feature_embeddings_args,

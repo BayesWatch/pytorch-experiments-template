@@ -1,8 +1,9 @@
 from .auto_builder_models import *
+from .auto_builder_densenet import *
+from .auto_builder_transformers import *
 from .densenet import *
 from .resnet import *
 from .wresnet import *
-from .auto_builder_transformers import *
 
 model_zoo = {
     "ResNet9": ResNet9,
@@ -18,12 +19,14 @@ model_zoo = {
     "PreActResNet152": PreActResNet152,
     "DenseNet121": DenseNet121,
     "DenseNet169": DenseNet169,
-    "DenseNet201": DenseNet201,
     "DenseNet161": DenseNet161,
+    "DenseNet201": DenseNet201,
     "WideResNet_16_8": WideResNet_16_8,
     "WideResNet_28_10": WideResNet_28_10,
     "WideResNet_40_2": WideResNet_40_2,
-    "ViT32LastTimeStep": EasyPeasyViTLastTimeStep,
-    "ViT32Flatten": EasyPeasyViTFlatten,
-    "EasyPeasyResNet": EasyPeasyResNet
+    "AutoConvNet": AutoConvNet,
+    "AutoResNet": AutoResNet,
+    "AutoDenseNet": AutoDenseNet,
+    "ViTLastTimeStep": AutoViTLastTimeStep,
+    "ViTFlatten": AutoViTFlatten
 }

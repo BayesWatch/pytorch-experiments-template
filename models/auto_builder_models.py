@@ -734,7 +734,7 @@ class Unsqueeze(nn.Module):
         return x.unsqueeze(self.dim)
 
 
-class EasyPeasyResNet(ClassificationModel):
+class AutoResNet(ClassificationModel):
     def __init__(self, num_classes, model_name_to_download, pretrained=True, **kwargs):
         feature_embedding_modules = [
             ResNet,
@@ -746,14 +746,14 @@ class EasyPeasyResNet(ClassificationModel):
             dict(dim=2),
             dict(dim=2),
         ]
-        super(EasyPeasyResNet, self).__init__(
+        super(AutoResNet, self).__init__(
             num_classes=num_classes,
             feature_embedding_module_list=feature_embedding_modules,
             feature_embedding_args=feature_embeddings_args,
         )
 
 
-class EasyPeasyConvNet(ClassificationModel):
+class AutoConvNet(ClassificationModel):
     def __init__(self, num_classes, kernel_size, filter_list, stride, padding):
         feature_embedding_modules = [Conv2dEmbedding]
         feature_embeddings_args = [
@@ -764,14 +764,14 @@ class EasyPeasyConvNet(ClassificationModel):
                 padding=padding,
             )
         ]
-        super(EasyPeasyConvNet, self).__init__(
+        super(AutoConvNet, self).__init__(
             num_classes=num_classes,
             feature_embedding_module_list=feature_embedding_modules,
             feature_embedding_args=feature_embeddings_args,
         )
 
 
-class EasyPeasyConvRelationalNet(ClassificationModel):
+class AutoConvRelationalNet(ClassificationModel):
     def __init__(
         self,
         num_classes,
@@ -801,7 +801,7 @@ class EasyPeasyConvRelationalNet(ClassificationModel):
                 avg_pool_input_shape=None,
             ),
         ]
-        super(EasyPeasyConvRelationalNet, self).__init__(
+        super(AutoConvRelationalNet, self).__init__(
             num_classes=num_classes,
             feature_embedding_module_list=feature_embedding_modules,
             feature_embedding_args=feature_embeddings_args,

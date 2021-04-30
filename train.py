@@ -127,7 +127,7 @@ def housekeeping():
     snapshot_filename = f"{saved_models_filepath}/snapshot.tar.gz"
     filetypes_to_include = [".py"]
     all_files = []
-    for filetype in filetypes_to_include:
+    for _ in filetypes_to_include:
         all_files += glob.glob("**/*.py", recursive=True)
     with tarfile.open(snapshot_filename, "w:gz") as tar:
         for file in all_files:
@@ -304,12 +304,13 @@ if __name__ == "__main__":
     metric_tracker_train, metric_tracker_val, metric_tracker_test = (
         MetricTracker(
             metrics_to_track=metrics_to_track,
-            load=True if start_epoch > 0 else False,
+            load=start_epoch > 0,
             path=f"{args.logs_filepath}/metrics_{tracker_name}.pt",
             tracker_name=tracker_name,
         )
         for tracker_name in ["training", "validation", "testing"]
     )
+
 
     #############################################PROGRESS-REPORTING#####################################################
 

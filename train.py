@@ -54,7 +54,12 @@ def get_base_argument_parser():
     # logging
     parser.add_argument("--experiment_name", type=str, default="dev")
     parser.add_argument("--logs_path", type=str, default="log")
-    parser.add_argument("--filepath_to_arguments_json_config", type=str, default=None)
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to a config file for the experiment (.json/.yaml)",
+    )
 
     parser.add_argument("--save_top_n_val_models", type=int, default=1)
     parser.add_argument("--val_set_percentage", type=float, default=0.1)
@@ -329,7 +334,7 @@ if __name__ == "__main__":
     train_iterations = 0
 
     with Live(
-        progress_reporter.progress_table, refresh_per_second=1
+        progress_reporter.progress_table, refresh_per_second=1, vertical_overflow="visible",
     ) as interface_panel:
         for epoch in range(start_epoch, args.max_epochs):
             train(

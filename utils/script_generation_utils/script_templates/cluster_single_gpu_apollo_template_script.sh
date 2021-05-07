@@ -39,4 +39,4 @@ conda activate mlp
 cd ../../
 export DATASET_DIR="datasets/"
 # Activate the relevant virtual environment:
-python $execution_script$ --filepath_to_arguments_json_config experiment_files/experiment_config_files/$experiment_config$ --num_gpus_to_use $NUM_GPUS
+python $execution_script$ --config experiment_files/experiment_config_files/$experiment_config$ --num_gpus_to_use $NUM_GPUS

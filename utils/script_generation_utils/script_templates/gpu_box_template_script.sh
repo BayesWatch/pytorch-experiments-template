@@ -18,4 +18,4 @@ export PYTHON_PATH=$PATH
 cd ../../
 export DATASET_DIR="datasets/"
 # Activate the relevant virtual environment:
-python $execution_script$ --filepath_to_arguments_config experiment_files/experiment_config_files/$experiment_config$ "$@"
+python $execution_script$ --config experiment_files/experiment_config_files/$experiment_config$ "$@"

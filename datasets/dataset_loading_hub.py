@@ -21,8 +21,7 @@ class ImageShape:
 
     def __iter__(self):
         # making this class iterable means we can convert it to a list if we need to
-        for each in self.__dict__.values():
-            yield each
+        yield from self.__dict__.values()
 
 
 class MNISTLoader:

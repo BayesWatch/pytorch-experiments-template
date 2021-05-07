@@ -8,16 +8,16 @@ import sys
 from rich import print
 
 
-# 3. priority should be defaults, json file, then any additional command line arguments
-def merge_json_with_mutable_arguments(json_file_path, arg_dict):
+# 3. priority should be defaults, json/yaml file, then any additional command line arguments
+def merge_config_with_mutable_arguments(config_file_path, arg_dict):
 
-    if json_file_path.endswith(".json"):
-        config_dict = load_dict_from_json(json_file_path)
-    elif json_file_path.endswith(".yaml"):
-        with open(json_file_path, "r") as config_file:
+    if config_file_path.endswith(".json"):
+        config_dict = load_dict_from_json(config_file_path)
+    elif config_file_path.endswith(".yaml"):
+        with open(config_file_path, "r") as config_file:
             config_dict = yaml.load(config_file)
     else: 
-        raise NotImplementedError(f"Expecting config to be yaml or json but got {json_file_path}.")
+        raise NotImplementedError(f"Expecting config to be yaml or json but got {config_file_path}.")
 
     arguments_passed_to_command_line = get_arguments_passed_on_command_line(
             arg_dict=arg_dict
@@ -113,9 +113,9 @@ def process_args(parser):
 
     args = parser.parse_args()
 
-    if args.filepath_to_arguments_json_config is not None:
-        args_dict = merge_json_with_mutable_arguments(
-            json_file_path=args.filepath_to_arguments_json_config, arg_dict=vars(args)
+    if args.filepath_to_arguments_config is not None:
+        args_dict = merge_config_with_mutable_arguments(
+            config_file_path=args.filepath_to_arguments_config, arg_dict=vars(args)
         )
         # convert argparse.Namespace to dictionary with vars()
         # add in the defaults as a starting point, then update with the extra parsed stuff

@@ -1,2 +1,3 @@
-batch_size : 2
+batch_size : 128
 dataset : "mnist"
+model.type: "ResNet9"

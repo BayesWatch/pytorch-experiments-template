@@ -308,12 +308,13 @@ if __name__ == "__main__":
     metric_tracker_train, metric_tracker_val, metric_tracker_test = (
         MetricTracker(
             metrics_to_track=metrics_to_track,
-            load=True if start_epoch > 0 else False,
+            load=start_epoch > 0,
             path=f"{args.logs_filepath}/metrics_{tracker_name}.pt",
             tracker_name=tracker_name,
         )
         for tracker_name in ["training", "validation", "testing"]
     )
+
 
     #############################################PROGRESS-REPORTING#####################
 

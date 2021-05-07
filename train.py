@@ -1,20 +1,27 @@
 import argparse
 import glob
-import logging
 import os
 import random
 import tarfile
 import time
 
 import numpy as np
+import torch
+import torch.backends.cudnn as cudnn
+import torch.nn as nn
+import torch.optim as optim
+from pytorch_model_summary import summary
 from rich.live import Live
+from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
 
+from datasets.dataset_loading_hub import load_dataset
 from models import model_zoo
 from utils.arg_parsing import add_extra_option_args, process_args
 from utils.gpu_selection_utils import select_devices
+from utils.metric_tracking import MetricTracker, compute_accuracy
 from utils.pretty_progress_reporting import PrettyProgressReporter
 from utils.storage import build_experiment_folder, save_checkpoint, restore_model
-from pytorch_model_summary import summary
+
 
 def get_base_argument_parser():
     parser = argparse.ArgumentParser()
@@ -50,11 +57,6 @@ def get_base_argument_parser():
     parser.add_argument("--filepath_to_arguments_json_config", type=str, default=None)
 
     parser.add_argument("--save_top_n_val_models", type=int, default=1)
-
-    # model
-    parser.add_argument("--model.type", type=str, default="ResNet9")
-    parser.add_argument("--model.dropout_rate", type=float, default=0.3)
-
     parser.add_argument("--val_set_percentage", type=float, default=0.1)
     # optimization
     parser.add_argument("--learning_rate", type=float, default=0.001)
@@ -81,17 +83,66 @@ def get_base_argument_parser():
     return parser
 
 
-######################################################################################################### Training
+def housekeeping():
+    argument_parser = get_base_argument_parser()
+    args = process_args(argument_parser)
+
+    if args.gpu_ids_to_use is None:
+        select_devices(
+            args.num_gpus_to_use,
+            max_load=args.max_gpu_selection_load,
+            max_memory=args.max_gpu_selection_memory,
+            exclude_gpu_ids=args.excude_gpu_list,
+        )
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids_to_use.replace(" ", ",")
+
+    saved_models_filepath, logs_filepath, images_filepath = build_experiment_folder(
+        experiment_name=args.experiment_name, log_path=args.logs_path
+    )
+
+    args.saved_models_filepath = saved_models_filepath
+    args.logs_filepath = logs_filepath
+    args.images_filepath = images_filepath
+
+    # Determinism Seeding can be annoying in pytorch at the moment.
+    # Based on my experience, the below means of seeding allows for deterministic
+    # experimentation.
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)  # set seed
+    random.seed(args.seed)
+    device = (
+        torch.cuda.current_device()
+        if torch.cuda.is_available() and args.num_gpus_to_use > 0
+        else "cpu"
+    )
+    args.device = device
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+        torch.backends.cudnn.deterministic = True
+
+    # Always save a snapshot of the current state of the code. I've found this helps
+    # immensely if you find that one of your many experiments was actually quite good
+    # but you forgot what you did
+
+    snapshot_filename = f"{saved_models_filepath}/snapshot.tar.gz"
+    filetypes_to_include = [".py"]
+    all_files = []
+    for _ in filetypes_to_include:
+        all_files += glob.glob("**/*.py", recursive=True)
+    with tarfile.open(snapshot_filename, "w:gz") as tar:
+        for file in all_files:
+            tar.add(file)
+
+    return args
 
 
 def train(epoch, data_loader, model, metric_tracker, progress_reporter):
     model = model.train()
-    # with tqdm.tqdm(initial=0, total=len(data_loader), smoothing=0) as pbar:
-    num_batches = len(data_loader)
     epoch_start_time = time.time()
 
     for batch_idx, (inputs, targets) in enumerate(data_loader):
-        inputs, targets = inputs.to(device), targets.to(device)
+        inputs, targets = inputs.to(args.device), targets.to(args.device)
 
         logits, features = model(inputs)
 
@@ -117,14 +168,11 @@ def train(epoch, data_loader, model, metric_tracker, progress_reporter):
 
 
 def eval(epoch, data_loader, model, metric_tracker, progress_reporter):
-    # with tqdm.tqdm(initial=0, total=len(data_loader), smoothing=0) as pbar:
-    num_batches = len(data_loader)
     epoch_start_time = time.time()
     model = model.eval()
 
     for batch_idx, (inputs, targets) in enumerate(data_loader):
-
-        inputs, targets = inputs.to(device), targets.to(device)
+        inputs, targets = inputs.to(args.device), targets.to(args.device)
 
         logits, features = model(inputs)
 
@@ -144,45 +192,12 @@ def eval(epoch, data_loader, model, metric_tracker, progress_reporter):
 
 
 if __name__ == "__main__":
-    argument_parser = get_base_argument_parser()
-    args = process_args(argument_parser)
+    #############################################HOUSE-KEEPING##########################
+    # Set variables, file keeping, logic, etc.
+    args = housekeeping()
 
-    if args.gpu_ids_to_use is None:
-        select_devices(
-            args.num_gpus_to_use,
-            max_load=args.max_gpu_selection_load,
-            max_memory=args.max_gpu_selection_memory,
-            exclude_gpu_ids=args.excude_gpu_list,
-        )
-    else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids_to_use.replace(" ", ",")
+    #############################################DATA-LOADING###########################
 
-    from datasets.dataset_loading_hub import load_dataset
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    import torch.backends.cudnn as cudnn
-    from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
-    from utils.metric_tracking import MetricTracker, compute_accuracy
-
-    ######################################################################################################### Admin
-    saved_models_filepath, logs_filepath, images_filepath = build_experiment_folder(
-        experiment_name=args.experiment_name, log_path=args.logs_path
-    )
-
-    ######################################################################################################### Data
-
-    #  if you have an environment variable set, prioritise this over the default argparse option
-    environment_data_filepath = os.environ.get("PYTORCH_DATA_LOC")
-    if environment_data_filepath is not None and os.path.exists(
-        environment_data_filepath
-    ):
-        logging.warning(
-            f"You have a data filepath set in your environment: {environment_data_filepath}. This will override argparse."
-        )
-        data_filepath = environment_data_filepath
-    else:
-        data_filepath = args.data_filepath
     (
         train_set_loader,
         val_set_loader,
@@ -194,65 +209,41 @@ if __name__ == "__main__":
         num_classes,
     ) = load_dataset(
         args.dataset_name,
-        args.data_filepath
-        if environment_data_filepath is None
-        else environment_data_filepath,
+        args.data_filepath,
         batch_size=args.batch_size,
         test_batch_size=args.eval_batch_size,
         num_workers=args.num_workers,
         download=True,
         val_set_percentage=args.val_set_percentage,
     )
+    args.model.num_classes = num_classes
+    args.model.in_channels = data_shape.channels
 
-    ######################################################################################################### Determinism
-    # Seeding can be annoying in pytorch at the moment. Based on my experience, the below means of seeding
-    # allows for deterministic experimentation.
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)  # set seed
-    random.seed(args.seed)
-    device = (
-        torch.cuda.current_device()
-        if torch.cuda.is_available() and args.num_gpus_to_use > 0
-        else "cpu"
-    )
-    args.device = device
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
-        torch.backends.cudnn.deterministic = True
+    #############################################MODEL-DEFINITION#######################
 
-    # Always save a snapshot of the current state of the code. I've found this helps immensely if you find that one of your
-    # many experiments was actually quite good but you forgot what you did
+    model = model_zoo[args.model.type](**args.model)
 
-    snapshot_filename = f"{saved_models_filepath}/snapshot.tar.gz"
-    filetypes_to_include = [".py"]
-    all_files = []
-    for filetype in filetypes_to_include:
-        all_files += glob.glob("**/*.py", recursive=True)
-    with tarfile.open(snapshot_filename, "w:gz") as tar:
-        for file in all_files:
-            tar.add(file)
-
-    ######################################################################################################### Model
-
-    model = model_zoo[args.model.type](
-        num_classes=num_classes, in_channels=data_shape.channels
-    )
-
-    print(summary(model, torch.zeros([1] + list(data_shape)), show_input=True, show_hierarchical=True))
-    
-    model = model.to(device)
     # alternatively one can define a model directly as follows
     # ```
-    # model = ResNet18(num_classes=num_classes, variant=args.dataset_name).to(device)
+    # model = ResNet18(num_classes=num_classes, variant=args.dataset_name)
+    # .to(args.device)
     # ```
 
-    if args.num_gpus_to_use > 1:
-        model = nn.parallel.DistributedDataParallel(
-            model
-        )  # more efficient version of DataParallel
+    print(
+        summary(
+            model,
+            torch.zeros([1] + list(data_shape)),
+            show_input=True,
+            show_hierarchical=True,
+        )
+    )
 
-    
-    ######################################################################################################### Optimisation
+    model = model.to(args.device)
+
+    if args.num_gpus_to_use > 1:
+        model = nn.parallel.DataParallel(model)
+
+    #############################################OPTIMISATION###########################
 
     params = model.parameters()
     criterion = nn.CrossEntropyLoss()
@@ -276,10 +267,10 @@ if __name__ == "__main__":
     else:
         scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=0.2)
 
-    ######################################################################################################### Restoring
+    #############################################RESTART/RESTORE/RESUME#################
 
     restore_fields = {
-        "model": model,
+        "model": model if not isinstance(model, nn.DataParallel) else model.module,
         "optimizer": optimizer,
         "scheduler": scheduler,
     }
@@ -289,19 +280,21 @@ if __name__ == "__main__":
         resume_epoch = restore_model(
             restore_fields,
             filename=args.experiment_name,
-            directory=saved_models_filepath,
+            directory=args.saved_models_filepath,
             epoch_idx=None,
         )
 
         if resume_epoch == -1:
             raise IOError(
-                f"Failed to load from {saved_models_filepath}/ckpt.pth.tar, which probably means that the "
-                f"latest checkpoint is missing, please remove the --resume flag to try training from scratch"
+                f"Failed to load from {args.saved_models_filepath}/ckpt.pth.tar, which "
+                f"probably means that the "
+                f"latest checkpoint is missing, please remove the --resume flag to "
+                f"try training from scratch "
             )
         else:
             start_epoch = resume_epoch + 1
 
-    ######################################################################################################### Metric
+    #############################################METRIC-TRACKING########################
 
     metrics_to_track = {
         "cross_entropy": lambda x, y: torch.nn.CrossEntropyLoss()(x, y).item(),
@@ -311,11 +304,13 @@ if __name__ == "__main__":
         MetricTracker(
             metrics_to_track=metrics_to_track,
             load=True if start_epoch > 0 else False,
-            path=f"{logs_filepath}/metrics_{tracker_name}.pt",
+            path=f"{args.logs_filepath}/metrics_{tracker_name}.pt",
             tracker_name=tracker_name,
         )
         for tracker_name in ["training", "validation", "testing"]
     )
+
+    #############################################PROGRESS-REPORTING#####################
 
     progress_reporter = PrettyProgressReporter(
         metric_trackers=(metric_tracker_train, metric_tracker_val, metric_tracker_test),
@@ -329,13 +324,14 @@ if __name__ == "__main__":
         test=args.test,
     )
 
+    #############################################TRAINING###############################
+
     train_iterations = 0
 
     with Live(
         progress_reporter.progress_table, refresh_per_second=1
     ) as interface_panel:
         for epoch in range(start_epoch, args.max_epochs):
-
             train(
                 epoch,
                 data_loader=train_set_loader,
@@ -354,23 +350,25 @@ if __name__ == "__main__":
 
             scheduler.step()
 
-            metric_tracker_train.plot(path=f"{images_filepath}/train/metrics.png")
-            metric_tracker_val.plot(path=f"{images_filepath}/val/metrics.png")
+            metric_tracker_train.plot(path=f"{args.images_filepath}/train/metrics.png")
+            metric_tracker_val.plot(path=f"{args.images_filepath}/val/metrics.png")
             metric_tracker_train.save()
             metric_tracker_val.save()
 
-            ################################################################################ Saving models
+            # ########################################################### Saving models
 
             state = {
                 "args": args,
                 "epoch": epoch,
-                "model": model.state_dict(),
+                "model": model.state_dict()
+                if not isinstance(model, nn.DataParallel)
+                else model.module.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
             }
 
             metric_tracker_val.refresh_best_n_epoch_models(
-                directory=saved_models_filepath,
+                directory=args.saved_models_filepath,
                 filename=args.experiment_name,
                 metric_name="accuracy",
                 n=args.save_top_n_val_models,
@@ -381,22 +379,14 @@ if __name__ == "__main__":
 
             save_checkpoint(
                 state=state,
-                directory=saved_models_filepath,
+                directory=args.saved_models_filepath,
                 filename=args.experiment_name,
                 is_best=False,
             )
-        ############################################################################################################
+
+        #############################################TESTING############################
 
         if args.test:
-            test_progress_dict = {
-                **dict(description="[green]Training", total=len(test_set_loader)),
-                **metric_tracker_test.get_current_iteration_metric_text_column_fields(),
-            }
-
-            test_epoch_progress = progress_reporter.epoch_progress.add_task(
-                **test_progress_dict
-            )
-
             if args.val_set_percentage >= 0.0:
                 top_n_model_idx = metric_tracker_val.get_best_n_epochs_for_metric(
                     metric_name="accuracy", n=1, bigger_is_better=True
@@ -404,7 +394,7 @@ if __name__ == "__main__":
                 resume_epoch = restore_model(
                     restore_fields,
                     filename=args.experiment_name,
-                    directory=saved_models_filepath,
+                    directory=args.saved_models_filepath,
                     epoch_idx=top_n_model_idx,
                 )
 

@@ -8,6 +8,8 @@ from rich import print
 
 __all__ = ["DenseNet121", "DenseNet169", "DenseNet201", "DenseNet161"]
 
+from utils.decorators import ignore_unexpected_kwargs
+
 
 class Bottleneck(nn.Module):
     def __init__(self, in_planes, growth_rate):
@@ -39,6 +41,7 @@ class Transition(nn.Module):
 
 
 class DenseNet(nn.Module):
+    @ignore_unexpected_kwargs
     def __init__(
         self,
         block,
@@ -84,14 +87,13 @@ class DenseNet(nn.Module):
 
     def _make_dense_layers(self, block, in_planes, nblock):
         layers = []
-        for i in range(nblock):
+        for _ in range(nblock):
             self.num_blocks += 1
             layers.append(block(in_planes, self.growth_rate))
             in_planes += self.growth_rate
         return nn.Sequential(*layers)
 
     def forward(self, x):
-
         layer0 = self.conv1(x)
         layer1 = self.trans1(self.dense1(layer0))
         layer2 = self.trans2(self.dense2(layer1))

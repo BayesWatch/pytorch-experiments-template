@@ -54,7 +54,12 @@ def get_base_argument_parser():
     # logging
     parser.add_argument("--experiment_name", type=str, default="dev")
     parser.add_argument("--logs_path", type=str, default="log")
-    parser.add_argument("-config", "--filepath_to_arguments_config", type=str, default=None)
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to a config file for the experiment (.json/.yaml)",
+    )
 
     parser.add_argument("--save_top_n_val_models", type=int, default=1)
     parser.add_argument("--val_set_percentage", type=float, default=0.1)

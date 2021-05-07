@@ -21,10 +21,9 @@ def ignore_unexpected_kwargs(func: Callable[..., Any]) -> Callable[..., Any]:
             params,
         )
 
-        res_kwargs = {
+        return {
             param.name: kwargs[param.name] for param in _params if param.name in kwargs
         }
-        return res_kwargs
 
     def contain_var_keyword():
         return len(params) >= 1 and any(

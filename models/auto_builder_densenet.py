@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from rich import print
 
 from models import ClassificationModel
-from models import Conv2dBNLeakyReLU
+from models import Conv2dBNLeakyReLU, SqueezeExciteConv2dBNLeakyReLU
 
 
 class DenseBlock(nn.Module):
@@ -20,6 +20,7 @@ class DenseBlock(nn.Module):
         kernel_size,
         stride,
         downsample_output_size=None,
+        processing_block_type=Conv2dBNLeakyReLU,
     ):
         super(DenseBlock, self).__init__()
         self.num_filters = num_filters
@@ -27,12 +28,13 @@ class DenseBlock(nn.Module):
         self.downsample_output_size = downsample_output_size
         self.kernel_size = kernel_size
         self.stride = stride
+        self.processing_block_type = processing_block_type
         self.is_built = False
 
     def build(self, input_shape):
         dummy_x = torch.zeros(input_shape)
 
-        self.conv_bn_relu_in = Conv2dBNLeakyReLU(
+        self.conv_bn_relu_in = self.processing_block_type(
             out_channels=self.num_filters,
             kernel_size=self.kernel_size,
             stride=self.stride,
@@ -81,13 +83,16 @@ class DenseBlock(nn.Module):
 
 
 class DenseNetEmbedding(nn.Module):
-    def __init__(self, num_filters, num_stages, num_blocks, dilated=False):
+    def __init__(
+        self, num_filters, num_stages, num_blocks, processing_block_type, dilated=False
+    ):
         super(DenseNetEmbedding, self).__init__()
         self.layer_dict = nn.ModuleDict()
         self.is_built = False
         self.num_filters = num_filters
         self.num_stages = num_stages
         self.num_blocks = num_blocks
+        self.processing_block_type = processing_block_type
         self.dilated = dilated
 
     def build(self, input_shape):
@@ -102,6 +107,7 @@ class DenseNetEmbedding(nn.Module):
             stride=1,
             kernel_size=3,
             downsample_output_size=int(np.floor(out.shape[-1] / 2)),
+            processing_block_type=self.processing_block_type,
         )
 
         out = self.layer_dict["stem_conv"].forward(out)
@@ -121,6 +127,7 @@ class DenseNetEmbedding(nn.Module):
                     downsample_output_size=None,
                     stride=1,
                     kernel_size=3,
+                    processing_block_type=self.processing_block_type,
                 )
 
                 out = self.layer_dict[
@@ -133,6 +140,7 @@ class DenseNetEmbedding(nn.Module):
                 stride=1,
                 kernel_size=3,
                 downsample_output_size=int(np.floor(out.shape[-1] / 2)),
+                processing_block_type=self.processing_block_type,
             )
 
             out = self.layer_dict["stage_{}_dim_reduction".format(stage_idx)].forward(
@@ -174,7 +182,14 @@ class DenseNetEmbedding(nn.Module):
 
 class AutoDenseNet(ClassificationModel):
     def __init__(
-        self, num_classes, num_filters, num_stages, num_blocks, dilated=False, **kwargs
+        self,
+        num_classes,
+        num_filters,
+        num_stages,
+        num_blocks,
+        use_squeeze_excite_attention,
+        dilated=False,
+        **kwargs
     ):
         feature_embedding_modules = [DenseNetEmbedding]
         feature_embeddings_args = [
@@ -183,6 +198,9 @@ class AutoDenseNet(ClassificationModel):
                 num_stages=num_stages,
                 num_blocks=num_blocks,
                 dilated=dilated,
+                processing_block_type=SqueezeExciteConv2dBNLeakyReLU
+                if use_squeeze_excite_attention
+                else Conv2dBNLeakyReLU
             )
         ]
         super(AutoDenseNet, self).__init__(

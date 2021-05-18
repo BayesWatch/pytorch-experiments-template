@@ -29,13 +29,15 @@ def apply_to_test_device(model, input_tensor):
 
     return model, input_tensor
 
+
 def test_AutoDenseNet_layer_output_shape():
     model = AutoDenseNet(
         num_classes=10,
         num_filters=16,
         num_stages=3,
         num_blocks=3,
-        dilated=False
+        use_squeeze_excite_attention=False,
+        dilated=False,
     )
     dummy_x = torch.zeros((8, 3, 224, 224))
     model, dummy_x = apply_to_test_device(model, dummy_x)
@@ -44,13 +46,49 @@ def test_AutoDenseNet_layer_output_shape():
     assert len(out.shape) == 2
     assert out.shape[1] == 10
 
+
 def test_AutoDenseNetDilated_layer_output_shape():
     model = AutoDenseNet(
         num_classes=10,
         num_filters=16,
         num_stages=3,
         num_blocks=3,
-        dilated=True
+        use_squeeze_excite_attention=False,
+        dilated=True,
+    )
+    dummy_x = torch.zeros((8, 3, 224, 224))
+    model, dummy_x = apply_to_test_device(model, dummy_x)
+    out, features = model.forward(dummy_x)
+
+    assert len(out.shape) == 2
+    assert out.shape[1] == 10
+
+
+def test_AutoDenseNetSqueezeExcite_layer_output_shape():
+    model = AutoDenseNet(
+        num_classes=10,
+        num_filters=16,
+        num_stages=3,
+        num_blocks=3,
+        use_squeeze_excite_attention=True,
+        dilated=False,
+    )
+    dummy_x = torch.zeros((8, 3, 224, 224))
+    model, dummy_x = apply_to_test_device(model, dummy_x)
+    out, features = model.forward(dummy_x)
+
+    assert len(out.shape) == 2
+    assert out.shape[1] == 10
+
+
+def test_AutoDenseNetDilatedSqueezeExcite_layer_output_shape():
+    model = AutoDenseNet(
+        num_classes=10,
+        num_filters=16,
+        num_stages=3,
+        num_blocks=3,
+        use_squeeze_excite_attention=True,
+        dilated=True,
     )
     dummy_x = torch.zeros((8, 3, 224, 224))
     model, dummy_x = apply_to_test_device(model, dummy_x)

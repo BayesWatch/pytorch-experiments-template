@@ -544,6 +544,109 @@ class Conv2dBNLeakyReLU(nn.Module):
         return out
 
 
+class SqueezeExciteConv2dBNLeakyReLU(nn.Module):
+    def __init__(
+        self, out_channels, kernel_size, stride, padding, dilation=1, bias=False
+    ):
+        super(SqueezeExciteConv2dBNLeakyReLU, self).__init__()
+        self.is_layer_built = False
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+        self.bias = bias
+
+    def build(self, input_shape):
+        out = torch.zeros(input_shape)
+
+        pooled = (
+            F.avg_pool2d(input=out, kernel_size=out.shape[-1]).squeeze(3).squeeze(2)
+        )
+
+        self.attention_fcc_network_in = nn.Linear(
+            in_features=pooled.shape[-1], out_features=64, bias=True
+        )
+
+        attention_out = self.attention_fcc_network_in.forward(input=pooled)
+
+        attention_out = F.leaky_relu(attention_out)
+
+        self.attention_fcc_network_out = nn.Linear(
+            in_features=attention_out.shape[-1],
+            out_features=pooled.shape[-1],
+            bias=True,
+        )
+
+        attention_out = self.attention_fcc_network_out.forward(attention_out)
+
+        attention_out = F.sigmoid(attention_out)
+
+        out = out * attention_out.unsqueeze(2).unsqueeze(3)
+
+        self.conv = nn.Conv2d(
+            in_channels=input_shape[1],
+            out_channels=self.out_channels,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
+            dilation=self.dilation,
+            groups=1,
+            bias=self.bias,
+            padding_mode="zeros",
+        )
+
+        out = self.conv.forward(out)
+
+        self.bn = nn.BatchNorm2d(
+            track_running_stats=True, affine=True, num_features=out.shape[1], eps=1e-5
+        )
+
+        out = self.bn.forward(out)
+
+        out = F.leaky_relu(out)
+
+        self.is_layer_built = True
+
+        print(
+            "Build ",
+            self.__class__.__name__,
+            "with input shape",
+            input_shape,
+            "with output shape",
+            out.shape,
+        )
+
+    def forward(self, x):
+        if not self.is_layer_built:
+            self.build(input_shape=x.shape)
+            self.to(x.device)
+
+        out = x
+
+        pooled = (
+            F.avg_pool2d(input=out, kernel_size=out.shape[-1]).squeeze(3).squeeze(2)
+        )
+
+        attention_out = self.attention_fcc_network_in.forward(input=pooled)
+
+        attention_out = F.leaky_relu(attention_out)
+
+        attention_out = self.attention_fcc_network_out.forward(attention_out)
+
+        attention_out = F.sigmoid(attention_out)
+
+        out = out * attention_out.unsqueeze(2).unsqueeze(3)
+
+        out = self.conv.forward(out)
+
+        out = self.bn.forward(out)
+
+        out = F.leaky_relu(out)
+
+        return out
+
+
 class Conv2dEmbedding(nn.Module):
     def __init__(
         self,

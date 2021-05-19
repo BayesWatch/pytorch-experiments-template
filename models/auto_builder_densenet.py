@@ -9,7 +9,11 @@ import torch.nn.functional as F
 from rich import print
 
 from models import ClassificationModel
-from models import Conv2dBNLeakyReLU, SqueezeExciteConv2dBNLeakyReLU
+from models import (
+    Conv2dBNLeakyReLU,
+    SqueezeExciteConv2dBNLeakyReLU,
+    BatchRelationalModule,
+)
 
 
 class DenseBlock(nn.Module):
@@ -188,10 +192,12 @@ class AutoDenseNet(ClassificationModel):
         num_stages,
         num_blocks,
         use_squeeze_excite_attention,
+        use_relational_net_global_pool=False,
         dilated=False,
         **kwargs
     ):
         feature_embedding_modules = [DenseNetEmbedding]
+
         feature_embeddings_args = [
             dict(
                 num_filters=num_filters,
@@ -200,9 +206,24 @@ class AutoDenseNet(ClassificationModel):
                 dilated=dilated,
                 processing_block_type=SqueezeExciteConv2dBNLeakyReLU
                 if use_squeeze_excite_attention
-                else Conv2dBNLeakyReLU
+                else Conv2dBNLeakyReLU,
             )
         ]
+
+        if use_relational_net_global_pool:
+            feature_embedding_modules.append(BatchRelationalModule)
+            feature_embeddings_args.append(
+                dict(
+                    num_filters=64,
+                    num_layers=2,
+                    num_outputs=-1,
+                    bias=True,
+                    num_post_processing_filters=64,
+                    num_post_processing_layers=2,
+                    avg_pool_input_shape=None,
+                )
+            )
+
         super(AutoDenseNet, self).__init__(
             num_classes=num_classes,
             feature_embedding_module_list=feature_embedding_modules,

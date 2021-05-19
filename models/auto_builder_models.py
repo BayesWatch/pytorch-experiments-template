@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from rich import print
+from einops import rearrange, reduce
 
 
 class ClassificationModel(nn.Module):
@@ -197,6 +198,7 @@ class BatchRelationalModule(nn.Module):
         self.num_post_processing_filters = num_post_processing_filters
         self.num_outputs = num_outputs
         self.num_layers = num_layers
+        self.num_filters = num_filters
         self.bias = bias
         self.avg_pool_input_shape = avg_pool_input_shape
         self.num_post_processing_layers = num_post_processing_layers
@@ -208,6 +210,7 @@ class BatchRelationalModule(nn.Module):
 
         if len(out_img.shape) == 4:
             b, c, h, w = out_img.shape
+            in_channels = c
             if self.avg_pool_input_shape is not None:
                 out_img = F.adaptive_avg_pool2d(
                     out_img, output_size=self.avg_pool_input_shape
@@ -216,7 +219,7 @@ class BatchRelationalModule(nn.Module):
 
         elif len(out_img.shape) == 3:
             b, c, h = out_img.shape  # c are the depth/features/channels
-
+            in_channels = c
             if self.avg_pool_input_shape is not None:
                 out_img = F.adaptive_max_pool1d(
                     out_img, output_size=self.avg_pool_input_shape
@@ -226,6 +229,7 @@ class BatchRelationalModule(nn.Module):
 
         elif len(out_img.shape) == 5:
             b, s, c, h, w = out_img.shape
+            in_channels = s
             # print(out_img.shape)
             out_img = out_img.view(b, s, -1)
 
@@ -235,6 +239,13 @@ class BatchRelationalModule(nn.Module):
                 out_img = F.adaptive_max_pool1d(
                     out_img, output_size=self.avg_pool_input_shape
                 )
+        else:
+            return NotImplementedError(
+                "Input to",
+                self.__class__.__name__,
+                "must be eithe 3, 4 or 5 dimensions, instead it is",
+                len(out_img.shape),
+            )
 
         out_img = out_img.permute([0, 2, 1])  # b, h*w, c or (b, h, c)
         (
@@ -286,7 +297,7 @@ class BatchRelationalModule(nn.Module):
         # print(out.shape)
         for idx_layer in range(self.num_layers):
             self.block_dict["g_fcc_{}".format(idx_layer)] = nn.Linear(
-                out.shape[1], out_features=self.num_post_processing_filters
+                out.shape[1], out_features=self.num_filters
             )
             out = F.leaky_relu(
                 self.block_dict["g_fcc_{}".format(idx_layer)].forward(out)
@@ -314,7 +325,9 @@ class BatchRelationalModule(nn.Module):
             out = F.leaky_relu(out)
 
         self.output_layer = nn.Linear(
-            in_features=out.shape[1], out_features=self.num_outputs, bias=self.bias
+            in_features=out.shape[1],
+            out_features=self.num_outputs if self.num_outputs != -1 else in_channels,
+            bias=self.bias,
         )  # (self.num_filters, self.num_filters)
         out = self.output_layer.forward(out)
         out = F.leaky_relu(out)

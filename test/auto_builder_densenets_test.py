@@ -96,3 +96,39 @@ def test_AutoDenseNetDilatedSqueezeExcite_layer_output_shape():
 
     assert len(out.shape) == 2
     assert out.shape[1] == 10
+
+
+def test_AutoDenseNetRelationalPool_layer_output_shape():
+    model = AutoDenseNet(
+        num_classes=10,
+        num_filters=16,
+        num_stages=3,
+        num_blocks=3,
+        use_squeeze_excite_attention=False,
+        dilated=False,
+        use_relational_net_global_pool=True
+    )
+    dummy_x = torch.zeros((8, 3, 224, 224))
+    model, dummy_x = apply_to_test_device(model, dummy_x)
+    out, features = model.forward(dummy_x)
+
+    assert len(out.shape) == 2
+    assert out.shape[1] == 10
+
+
+def test_AutoDenseNetDilatedRelational_layer_output_shape():
+    model = AutoDenseNet(
+        num_classes=10,
+        num_filters=16,
+        num_stages=3,
+        num_blocks=3,
+        use_squeeze_excite_attention=False,
+        dilated=True,
+        use_relational_net_global_pool=True
+    )
+    dummy_x = torch.zeros((8, 3, 224, 224))
+    model, dummy_x = apply_to_test_device(model, dummy_x)
+    out, features = model.forward(dummy_x)
+
+    assert len(out.shape) == 2
+    assert out.shape[1] == 10

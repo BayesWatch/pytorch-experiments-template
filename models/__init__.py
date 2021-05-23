@@ -3,6 +3,7 @@ from .densenet import *
 from .resnet import *
 from .wresnet import *
 from .auto_builder_transformers import *
+from .clip import *
 
 model_zoo = {
     "ResNet9": ResNet9,

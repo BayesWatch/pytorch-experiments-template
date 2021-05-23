@@ -12,7 +12,7 @@ from rich import print
 import requests
 import tqdm  # progress bar
 import os.path
-
+import pathlib
 
 def isfloat(x):
     return isinstance(x, float)
@@ -133,16 +133,15 @@ def restore_model(restore_fields, directory, filename, epoch_idx=None, device="c
 
     if not os.path.isfile(checkpoint_filepath):
         return -1
-    else:
-        checkpoint = torch.load(
-            checkpoint_filepath,
-            map_location=lambda storage, loc: storage,
-        )
+    checkpoint = torch.load(
+        checkpoint_filepath,
+        map_location=lambda storage, loc: storage,
+    )
 
-        for name, field in restore_fields.items():
-            field.load_state_dict(checkpoint[name])
+    for name, field in restore_fields.items():
+        field.load_state_dict(checkpoint[name])
 
-        return checkpoint["epoch"]
+    return checkpoint["epoch"]
 
 
 def build_experiment_folder(experiment_name, log_path, save_images=True):
@@ -206,7 +205,7 @@ def get_best_performing_epoch_on_target_metric(
     return best_model_epoch, best_target_metric
 
 
-def download_file(url, filename=False, verbose=False):
+def download_file(url, filename=None, verbose=False):
     """
     Download file with progressbar
     __author__ = "github.com/ruxi"
@@ -225,6 +224,12 @@ def download_file(url, filename=False, verbose=False):
     if verbose:
         print(dict(file_size=file_size))
         print(dict(num_bars=num_bars))
+
+    file_directory = filename.replace(filename.split('/')[-1], '')
+
+    file_directory = pathlib.Path(file_directory)
+
+    file_directory.mkdir(parents=True, exist_ok=True)
 
     with open(local_filename, "wb") as fp:
         for chunk in tqdm.tqdm(

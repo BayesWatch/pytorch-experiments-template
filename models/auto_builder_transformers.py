@@ -4,12 +4,10 @@ import os
 import pathlib
 from collections import OrderedDict
 
-import torch
-import torch.nn as nn
 from rich import print
 
 from models.auto_builder_models import ClassificationModel
-from models.clip_models.model import Transformer, LayerNorm, model_to_download_url_dict
+from clip_models_adapted.model import Transformer, LayerNorm, model_to_download_url_dict
 from utils.storage import download_file
 import torch.nn.functional as F
 import torch

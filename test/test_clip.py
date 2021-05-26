@@ -6,6 +6,10 @@ from rich import print
 
 from models.clip import clip
 
+# write your own version of this and have a test that confirms that it predicts the
+# same stuff
+# perhaps write your own version and then train it and compare the results
+
 @pytest.mark.parametrize('model_name', clip.available_models())
 def test_consistency(model_name):
     device_idx = torch.cuda.current_device() if torch.cuda.is_available() else None

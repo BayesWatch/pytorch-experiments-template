@@ -1,0 +1,19 @@
+dataset: imagenet
+experiment_name: "imagenet_example_1"
+
+seed: 1
+num_gpus_to_use: 4
+workers: 8
+
+max_epochs: 90
+batch_size: 256
+
+optim: SGD
+learning_rate: 0.1
+momentum: 0.9
+weight_decay: 1.0e-4
+
+scheduler: MultiStep
+milestones: [30,60]
+
+model.type: ResNet50

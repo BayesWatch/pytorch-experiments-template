@@ -262,3 +262,7 @@ class EasyPeasyViTLastTimeStep(ClassificationModel):
             feature_embedding_module_list=feature_embedding_modules,
             feature_embedding_args=feature_embeddings_args,
         )
+
+class AudioTransformer(nn.Module):
+    def __init__(self):
+        

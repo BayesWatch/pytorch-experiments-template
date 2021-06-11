@@ -4,6 +4,7 @@ import os
 import pathlib
 from collections import OrderedDict
 
+import numpy as np
 from rich import print
 
 from models.auto_builder_models import ClassificationModel
@@ -12,6 +13,7 @@ from utils.storage import download_file
 import torch.nn.functional as F
 import torch
 import torch.nn as nn
+from einops import rearrange, reduce, repeat
 
 
 class VisualTransformer(nn.Module):
@@ -129,11 +131,11 @@ class VisualTransformer(nn.Module):
             target_url = model_to_download_url_dict[self.model_name_to_download]
             download_file(url=target_url, filename=model_weights_filepath, verbose=True)
         test_dict = {
-                key: value
-                for key, value in torch.load(
-                    model_weights_filepath
-                ).visual.named_parameters()
-            }
+            key: value
+            for key, value in torch.load(
+                model_weights_filepath
+            ).visual.named_parameters()
+        }
         for key, value in test_dict.items():
             print(key, value.shape)
         named_parameters = OrderedDict(
@@ -150,7 +152,6 @@ class VisualTransformer(nn.Module):
 
         if self.pretrained and x.shape[2] != 224:
             x = F.interpolate(x, size=(224, 224))
-
 
         if not self.is_built:
             self.build(input_shape=x.shape)
@@ -263,6 +264,135 @@ class EasyPeasyViTLastTimeStep(ClassificationModel):
             feature_embedding_args=feature_embeddings_args,
         )
 
-class AudioTransformer(nn.Module):
-    def __init__(self):
-        
+
+class Conv2DTransformer(nn.Module):
+    def __init__(
+        self,
+        grid_patch_size: int,
+        transformer_num_filters: int,
+        transformer_num_layers: int,
+        transformer_num_heads: int,
+        stem_conv_bias: False,
+    ):
+        super(Conv2DTransformer, self).__init__()
+        self.grid_patch_size = grid_patch_size
+        self.transformer_num_filters = transformer_num_filters
+        self.transformer_num_layers = transformer_num_layers
+        self.transformer_num_heads = transformer_num_heads
+        self.stem_conv_bias = stem_conv_bias
+
+        self.is_built = False
+
+    def build(self, input_shape):
+        dummy_x = torch.zeros(input_shape)
+
+        ratio = (dummy_x.shape[2]) / self.grid_patch_size
+
+        if not ratio.is_integer():
+            ceiling = int(np.ceil(ratio))
+            new_h = ceiling * self.grid_patch_size
+            new_w = ceiling * self.grid_patch_size
+            dummy_x = F.interpolate(
+                dummy_x,
+                size=(new_h, new_w),
+            )
+
+        out = dummy_x
+
+        b, c, h, w = out.shape
+
+        self.layer_dict = nn.ModuleDict()
+
+        out = rearrange(
+            out,
+            "b f (h h1) (w w1) -> (b h w) (h1 w1 f)",
+            h1=self.grid_patch_size,
+            w1=self.grid_patch_size,
+        )
+
+        num_patches = out.shape[0] / dummy_x.shape[0]
+
+        self.layer_dict["stem_linear"] = nn.Linear(
+            in_features=out.shape[1],
+            out_features=int(
+                self.transformer_num_filters
+            ),
+            bias=True,
+        )
+
+        out = self.layer_dict["stem_linear"].forward(out)
+        # b, c, h, w
+
+        self.layer_dict["stem_layer_normalization"] = nn.LayerNorm(out.shape[1])
+
+        out = self.layer_dict["stem_layer_normalization"].forward(out)
+
+        out = rearrange(
+            out,
+            "(b s) (f) -> b s f",
+            s=int(num_patches)
+        )
+
+        # b, f, h * w
+
+        # b, f, grid_patch_size * grid_patch_size,
+        # h / grid_patch_size, w / grid_patch_size
+
+        # b, f, grid_patch_size * grid_patch_size,
+        # (h / grid_patch_size) * (w / grid_patch_size)
+
+        # b, f * grid_patch_size * grid_patch_size,
+        # (h / grid_patch_size) * (w / grid_patch_size)
+
+        # b, (h / grid_patch_size) * (w / grid_patch_size),
+        # f * grid_patch_size * grid_patch_size
+
+        self.enumerate_patches_idx = (
+            torch.arange(start=0, end=num_patches) / num_patches
+        )
+
+        position_inputs = repeat(
+            self.enumerate_patches_idx, "p -> b p", b=dummy_x.shape[0]
+        )
+
+        position_inputs = rearrange(position_inputs, "b (p d) -> (b p) d", d=1)
+
+        self.layer_dict["positional_embedding_generator_network"] = nn.Linear(
+            in_features=1, out_features=out.shape[2], bias=True
+        )
+
+        positional_embeddings = F.leaky_relu(
+            self.layer_dict["positional_embedding_generator_network"].forward(
+                position_inputs
+            )
+        )
+
+        positional_embeddings = rearrange(
+            positional_embeddings,
+            "(b p) d -> b p d",
+            b=dummy_x.shape[0],
+            d=out.shape[2],
+        )
+        out = out + positional_embeddings
+
+        self.is_built = True
+        print("Built", self.__class__.__name__, "with output shape", out.shape)
+
+    def forward(self, x):
+        if not self.is_built:
+            self.build(input_shape=x.shape)
+
+        return x
+
+
+# test_module = Conv2DTransformer(
+#     grid_patch_size=16,
+#     transformer_num_filters=128,
+#     transformer_num_layers=4,
+#     transformer_num_heads=4,
+#     stem_conv_bias=True,
+# )
+#
+# dummy_x = torch.zeros(32, 3, 224, 224)
+#
+# out = test_module.forward(dummy_x)
